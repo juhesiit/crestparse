@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-crestparse singlefile version v 0.1.2
+crestparse singlefile version v 0.2
 
 A command line program to quickly analyze results from crest conformation searches.
 
@@ -17,12 +17,8 @@ import argparse
 import re
 import logging
 import math
+import numpy as np
 
-def tokcal(e):
-    return e*627.5
-
-def tohartree(e):
-    return e/627.5
 
 class Conformer:
     def __init__(self, index, energy, xyzFile):
@@ -31,6 +27,17 @@ class Conformer:
         self.relativeEnergy = 0
         self.xyzFile = xyzFile
         self.boltzmannFactor = 0
+        self.atoms = []
+        
+        # Populate the atom table, skip the two first rows
+        for row in xyzFile[2:]:
+            atomData = row.split()
+            
+            x = float(atomData[1])
+            y = float(atomData[2])
+            z = float(atomData[3])
+			
+            self.atoms.append(np.array([x,y,z]))
         
     def formatxyz(self):
         stringOutput = ""
@@ -38,7 +45,24 @@ class Conformer:
             stringOutput += line + "\n"
         return stringOutput
 
+    def distance(self, atomIndex1, atomIndex2):
+        return np.linalg.norm(self.atoms[atomIndex1] - self.atoms[atomIndex2])
+
+    def angle(self, atomIndex1, atomIndex2, atomIndex3):
+        vector12 = self.atoms[atomIndex1] - self.atoms[atomIndex2]
+        vector23 = self.atoms[atomIndex3] - self.atoms[atomIndex2]
+        cosineAngle = np.dot(vector12, vector23) / (np.linalg.norm(vector12) * np.linalg.norm(vector23))
+        angle = np.arccos(cosineAngle)
+        return np.degrees(angle)
+    
+
 # Auxiliary functions for energies
+def tokcal(e):
+    return e*627.5
+
+def tohartree(e):
+    return e/627.5
+
 def getMinimum(confList):
     return min(confList, key=lambda c: c.energy)
 
@@ -94,6 +118,8 @@ def main(arguments):
     parser.add_argument("-c", "--cutoff", help = "Add an energy cutoff in kcal/mol, only conformers up to the cutoff will be shown", type = float)
     parser.add_argument("-t", "--temperature", help = "Set the Boltzmann distribution temperature (in K)", type = float, default = 298.15)
     parser.add_argument("-e", "--extract", help = "Conformer indexes to be extracted into separate files (conf_n.xyz). If not provided, all conformers will be extracted.", nargs="*", type=int)
+    parser.add_argument("-d", "--distance", help = "Provides the distance in angstrom between two atoms with given indeces", nargs=2, type=int)
+    parser.add_argument("-a", "--angle", help = "Provides the angle in degrees between three atoms with given indeces", nargs=3, type=int)
     args = parser.parse_args(arguments)
 
     verbose = args.verbose
@@ -101,6 +127,8 @@ def main(arguments):
     cutoff = args.cutoff
     temperature = args.temperature
     silent = args.silent
+    distances = args.distance
+    angles = args.angle
 
     conformers = readMultixyzFile(xyzFileIn)
     confomerTotal = len(conformers)
@@ -120,7 +148,6 @@ def main(arguments):
         conformers = applyCutoff(conformers, tohartree(float(cutoff)))
         logging.info("Applying an energy cutoff of " + str(cutoff) + " kcal/mol: " + str(len(conformers)) + " conformers remaining, " + str(confomerTotal-len(conformers)) + " structures removed")
 
-
     # No extraction requested?
     if args.extract == None:
         extractionList = []
@@ -133,17 +160,29 @@ def main(arguments):
     if args.extract == []:
         extractionList = list(range(1, len(conformers)+1))
 
+    # Rough'n'ready implementation, needs some work
     if not silent:
-        print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann (%) T = " + str(temperature) + " K")
+        if distances:
+            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\tDistance " + str(distances[0]) + "-" + str(distances[1]))
+        elif angles:
+            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\tAngle " + str(angles[0]) + "-" + str(angles[1]) + "-" + str(angles[2]))
+        else:
+            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K")
         for i, c in enumerate(conformers):
-            print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i]))
+            if distances:
+                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], c.distance(distances[0], distances[1])))
+            elif angles:
+                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], c.angle(angles[0], angles[1], angles[2])))
+            else:
+                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i]))
 
     logging.info("Exporting files...")
     if extractionList:
         for i in extractionList:
             path = "conf_" + str(i) + ".xyz"
             writexyzFile(conformers[i-1], path)
-            print("Conformer #" + str(i) + " exported to file " + path)
+            if not silent:
+                print("Conformer #" + str(i) + " exported to file " + path)
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))
