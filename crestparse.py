@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 
 """
-crestparse singlefile version v 0.1
+crestparse singlefile version v 0.1.2
 
 A command line program to quickly analyze results from crest conformation searches.
 
-Juha Siitonen 2.5.2020
-Rice University
+Juha Siitonen 13.4.2024
+Rice University, Aalto University
 
 This project is licensed under the terms of the MIT license.
 """
@@ -31,13 +31,14 @@ class Conformer:
         self.relativeEnergy = 0
         self.xyzFile = xyzFile
         self.boltzmannFactor = 0
-
+        
     def formatxyz(self):
         stringOutput = ""
         for line in self.xyzFile:
             stringOutput += line + "\n"
         return stringOutput
 
+# Auxiliary functions for energies
 def getMinimum(confList):
     return min(confList, key=lambda c: c.energy)
 
@@ -104,13 +105,6 @@ def main(arguments):
     conformers = readMultixyzFile(xyzFileIn)
     confomerTotal = len(conformers)
 
-    if args.extract:
-        extractionList = args.extract
-    else:
-        extractionList = list(range(1, len(conformers)+1))
-
-
-
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
 
@@ -121,9 +115,23 @@ def main(arguments):
     logging.info("Calculating the Boltzmann distribution at " + str(temperature) + " K for total of "+ str(confomerTotal) + " conformers...")
     distribution = boltzmannDistribution(conformers, temperature)
 
+    # Apply a cutoff and remove unnesecary conformers
     if cutoff:
         conformers = applyCutoff(conformers, tohartree(float(cutoff)))
         logging.info("Applying an energy cutoff of " + str(cutoff) + " kcal/mol: " + str(len(conformers)) + " conformers remaining, " + str(confomerTotal-len(conformers)) + " structures removed")
+
+
+    # No extraction requested?
+    if args.extract == None:
+        extractionList = []
+        
+    # Partial list requested?
+    if args.extract:
+        extractionList = args.extract
+    
+    # All requested?
+    if args.extract == []:
+        extractionList = list(range(1, len(conformers)+1))
 
     if not silent:
         print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann (%) T = " + str(temperature) + " K")
