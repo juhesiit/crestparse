@@ -1,4 +1,4 @@
-# Crestparse 0.1
+# Crestparse 0.1.2
 
 Crestparse is a command line tool for analyzing and manipulating multi-xyz files produced by crest.
 
@@ -34,7 +34,7 @@ Calculating the Boltzmann distribution at 298.15 K for total of 57 conformers...
 ...
 ```
 
-Conformations can be extracted to spearate files (`conf1.xyz`) with `-e` or `--extract` followed by the desired conformer index (or multiple indeces)
+Conformations can be extracted to spearate files (`conf1.xyz`) with `-e` or `--extract` followed by the desired conformer index (or multiple indeces). By providing just `--extract`, all conformers within the energy window will be exported as `.xyz` files.
 
 ```
 crestparse crest_conformers.xyz -e 1,3,4
