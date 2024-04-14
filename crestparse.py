@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-crestparse singlefile version v 0.2.1
+crestparse singlefile version v 0.2.2
 
 A command line program to quickly analyze results from crest conformation searches.
 
@@ -74,7 +74,15 @@ class Conformer:
         y = np.dot(np.cross(vector32, projection12), projection24)
         angle = np.arctan2(y, x)
         return np.degrees(angle)
-
+    
+    # Degree of pyramidalization between four cartesian coordinates in 3D
+    def pyramidalization(self, atomIndex1, atomIndex2, atomIndex3, atomIndex4):
+        angle213 = self.angle(atomIndex2, atomIndex1, atomIndex3)
+        angle314 = self.angle(atomIndex3, atomIndex1, atomIndex4)
+        angle412 = self.angle(atomIndex4, atomIndex1, atomIndex2)
+        totalAngle = angle213 + angle314 + angle412
+        # Map the values between a flat plane (360 deg) or tetrahedron (109,5*3 deg)
+        return np.interp(totalAngle, [328.5,360], [1,0])
 
 # Auxiliary functions for energies
 def tokcal(e):
@@ -141,6 +149,7 @@ def main(arguments):
     parser.add_argument("-d", "--distance", help = "Provides the distance in angstrom between two atoms with given indeces", nargs=2, type=int)
     parser.add_argument("-a", "--angle", help = "Provides the angle in degrees between three atoms with given indeces", nargs=3, type=int)
     parser.add_argument("-r", "--dihedral", help = "Provides the dihedral in degrees between four atoms with given indeces", nargs=4, type=int)
+    parser.add_argument("-p", "--pyramidalization", help = "Provides the pyramidalization degree between four atoms with given indeces. First atom is the central one.", nargs=4, type=int)
     args = parser.parse_args(arguments)
 
     verbose = args.verbose
@@ -151,6 +160,7 @@ def main(arguments):
     distances = args.distance
     angles = args.angle
     dihedrals = args.dihedral
+    pyramidalization = args.pyramidalization
 
     conformers = readMultixyzFile(xyzFileIn)
     confomerTotal = len(conformers)
@@ -158,17 +168,17 @@ def main(arguments):
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    logging.info("Successfully read in " + str(confomerTotal) + " structures")
+    logging.info(f"Successfully read in {confomerTotal} structures")
 
     calculateRelativeEnergies(conformers)
 
-    logging.info("Calculating the Boltzmann distribution at " + str(temperature) + " K for total of "+ str(confomerTotal) + " conformers...")
+    logging.info(f"Calculating the Boltzmann distribution at {temperature} K for total of {confomerTotal} conformers...")
     distribution = boltzmannDistribution(conformers, temperature)
 
     # Apply a cutoff and remove unnesecary conformers
     if cutoff:
         conformers = applyCutoff(conformers, tohartree(float(cutoff)))
-        logging.info("Applying an energy cutoff of " + str(cutoff) + " kcal/mol: " + str(len(conformers)) + " conformers remaining, " + str(confomerTotal-len(conformers)) + " structures removed")
+        logging.info(f"Applying an energy cutoff of {cutoff} kcal/mol: {len(conformers)} conformers remaining, {confomerTotal-len(conformers)} structures removed")
 
     # No exports requested?
     if args.extract == None:
@@ -188,38 +198,54 @@ def main(arguments):
         title = ""
         
         if distances:
-            title = "Distance " + str(distances[0]) + "-" + str(distances[1])
+            title = f"Distance {distances[0]}-{distances[1]}"
         if angles:
-            title = "Angle " + str(angles[0]) + "-" + str(angles[1]) + "-" + str(angles[2])
+            title = f"Angle {angles[0]}-{angles[1]}-{angles[2]}"
         if dihedrals:
-            title = "Dihedral " + str(dihedrals[0]) + "-" + str(dihedrals[1]) + "-" + str(dihedrals[2]) + "-" + str(dihedrals[3])
+            title = f"Dihedral {dihedrals[0]}-{dihedrals[1]}-{dihedrals[2]}-{dihedrals[3]}"
+        if pyramidalization:
+            title = f"Pyramidalization {pyramidalization[0]}-{pyramidalization[1]}-{pyramidalization[2]}-{pyramidalization[3]}"
+            
 
-        print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\t" + title)
+        print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T={0}\t{1}".format(temperature, title))
         
         for i, c in enumerate(conformers):
             # Measurement data
             data = None
-            
             if distances:
                 data = c.distance(distances[0], distances[1])
             if angles:
                 data = c.angle(angles[0], angles[1], angles[2])
             if dihedrals:
                 data = c.dihedral(dihedrals[0], dihedrals[1], dihedrals[2], dihedrals[3])
+            if pyramidalization:
+                data = c.pyramidalization(pyramidalization[0], pyramidalization[1], pyramidalization[2], pyramidalization[3])
             
             if data:
-                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], data))
+                print('{0:d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(
+                    c.index,
+                    c.energy,
+                    c.relativeEnergy,
+                    tokcal(c.relativeEnergy),
+                    distribution[i],
+                    data))
             else:
-                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i]))
+                print('{0:d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}'.format(
+                    c.index,
+                    c.energy,
+                    c.relativeEnergy,
+                    tokcal(c.relativeEnergy),
+                    distribution[i]))
 
             
-    logging.info("Exporting files...")
     if extractionList:
+        logging.info("Exporting files...")
+        
         for i in extractionList:
-            path = "conf_" + str(i) + ".xyz"
+            path = f"conf_{i}.xyz"
             writexyzFile(conformers[i-1], path)
             if not silent:
-                print("Conformer #" + str(i) + " exported to file " + path)
+                print("Conformer #{0} exported to file {1}".format(i, path))
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))
