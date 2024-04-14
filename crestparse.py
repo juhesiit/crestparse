@@ -1,12 +1,17 @@
 #!/usr/bin/python3
 
 """
-crestparse singlefile version v 0.2
+crestparse singlefile version v 0.2.1
 
 A command line program to quickly analyze results from crest conformation searches.
 
-Juha Siitonen 13.4.2024
+Juha Siitonen 14.4.2024
 Rice University, Aalto University
+
+TODO:
+- Implement multiple simultaneous measurements (currently supports only one at a time)
+- Clean up the output formatting functions
+- 
 
 This project is licensed under the terms of the MIT license.
 """
@@ -45,9 +50,11 @@ class Conformer:
             stringOutput += line + "\n"
         return stringOutput
 
+    # Distance between two cartesian cooardinates in 3D
     def distance(self, atomIndex1, atomIndex2):
         return np.linalg.norm(self.atoms[atomIndex1] - self.atoms[atomIndex2])
 
+    # Angle between three cartesian coordinates in 3D
     def angle(self, atomIndex1, atomIndex2, atomIndex3):
         vector12 = self.atoms[atomIndex1] - self.atoms[atomIndex2]
         vector23 = self.atoms[atomIndex3] - self.atoms[atomIndex2]
@@ -55,6 +62,19 @@ class Conformer:
         angle = np.arccos(cosineAngle)
         return np.degrees(angle)
     
+    # Dihedral angle between four cartesian coordinates in 3D
+    def dihedral(self, atomIndex1, atomIndex2, atomIndex3, atomIndex4):
+        vector12 = -1*(self.atoms[atomIndex2] - self.atoms[atomIndex1])
+        vector32 = self.atoms[atomIndex3] - self.atoms[atomIndex2]
+        vector24 = self.atoms[atomIndex4] - self.atoms[atomIndex2]
+        vector32 /= np.linalg.norm(vector32)
+        projection12 = vector12 - np.dot(vector12, vector32)*vector32
+        projection24 = vector24 - np.dot(vector24, vector32)*vector32
+        x = np.dot(projection12, projection24)
+        y = np.dot(np.cross(vector32, projection12), projection24)
+        angle = np.arctan2(y, x)
+        return np.degrees(angle)
+
 
 # Auxiliary functions for energies
 def tokcal(e):
@@ -120,6 +140,7 @@ def main(arguments):
     parser.add_argument("-e", "--extract", help = "Conformer indexes to be extracted into separate files (conf_n.xyz). If not provided, all conformers will be extracted.", nargs="*", type=int)
     parser.add_argument("-d", "--distance", help = "Provides the distance in angstrom between two atoms with given indeces", nargs=2, type=int)
     parser.add_argument("-a", "--angle", help = "Provides the angle in degrees between three atoms with given indeces", nargs=3, type=int)
+    parser.add_argument("-r", "--dihedral", help = "Provides the dihedral in degrees between four atoms with given indeces", nargs=4, type=int)
     args = parser.parse_args(arguments)
 
     verbose = args.verbose
@@ -129,6 +150,7 @@ def main(arguments):
     silent = args.silent
     distances = args.distance
     angles = args.angle
+    dihedrals = args.dihedral
 
     conformers = readMultixyzFile(xyzFileIn)
     confomerTotal = len(conformers)
@@ -148,34 +170,49 @@ def main(arguments):
         conformers = applyCutoff(conformers, tohartree(float(cutoff)))
         logging.info("Applying an energy cutoff of " + str(cutoff) + " kcal/mol: " + str(len(conformers)) + " conformers remaining, " + str(confomerTotal-len(conformers)) + " structures removed")
 
-    # No extraction requested?
+    # No exports requested?
     if args.extract == None:
         extractionList = []
         
-    # Partial list requested?
+    # Partial list of conformers requested to be exported?
     if args.extract:
         extractionList = args.extract
     
-    # All requested?
+    # All conformers requested to be exported?
     if args.extract == []:
         extractionList = list(range(1, len(conformers)+1))
 
     # Rough'n'ready implementation, needs some work
     if not silent:
+        # Measurement parameter titles
+        title = ""
+        
         if distances:
-            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\tDistance " + str(distances[0]) + "-" + str(distances[1]))
-        elif angles:
-            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\tAngle " + str(angles[0]) + "-" + str(angles[1]) + "-" + str(angles[2]))
-        else:
-            print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K")
+            title = "Distance " + str(distances[0]) + "-" + str(distances[1])
+        if angles:
+            title = "Angle " + str(angles[0]) + "-" + str(angles[1]) + "-" + str(angles[2])
+        if dihedrals:
+            title = "Dihedral " + str(dihedrals[0]) + "-" + str(dihedrals[1]) + "-" + str(dihedrals[2]) + "-" + str(dihedrals[3])
+
+        print("#\tE (Hartree)\tdE (Hartree)\tdE (kcal/mol)\tBoltzmann T=" + str(temperature) + " K\t" + title)
+        
         for i, c in enumerate(conformers):
+            # Measurement data
+            data = None
+            
             if distances:
-                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], c.distance(distances[0], distances[1])))
-            elif angles:
-                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], c.angle(angles[0], angles[1], angles[2])))
+                data = c.distance(distances[0], distances[1])
+            if angles:
+                data = c.angle(angles[0], angles[1], angles[2])
+            if dihedrals:
+                data = c.dihedral(dihedrals[0], dihedrals[1], dihedrals[2], dihedrals[3])
+            
+            if data:
+                print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}\t\t{5:f}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i], data))
             else:
                 print('{0:2d}\t{1:f}\t{2:f}\t{3:f}\t{4:%}'.format(c.index, c.energy, c.relativeEnergy, tokcal(c.relativeEnergy), distribution[i]))
 
+            
     logging.info("Exporting files...")
     if extractionList:
         for i in extractionList:
