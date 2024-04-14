@@ -1,10 +1,10 @@
-# Crestparse 0.2
+# Crestparse 0.2.1
 
 Crestparse is a command line tool for analyzing and manipulating multi-xyz files produced by crest.
 
 ## Usage
 
-Analyzing a conformation file is carried out by simply doing
+Analyzing a conformation file is carried out by simply running
 
 ```
 crestparse crest_conformers.xyz
@@ -25,7 +25,7 @@ which will output a default
  9      -21.039617      0.005267        3.305325        0.273440%
 ```
 
-Conformations can be extracted to separate files (`conf1.xyz`) with `-e` or `--extract` followed by the desired conformer index (or multiple indeces). By providing just `--extract`, all conformers within the energy window will be exported as `.xyz` files.
+Conformations can be extracted to separate files (`conf1.xyz`) with `-e` or `--extract` followed by the desired conformer index (or multiple indeces). By providing just `--extract`, all conformers within the energy window will be exported as `.xyz` files. If a cutoff limit is invoked, only conformers until the energy cutoff limit will be extracted.
 
 ```
 crestparse crest_conformers.xyz -e 1,3,4
@@ -64,7 +64,7 @@ will output
  9      -21.039617      0.005267        3.305325        0.273440%               3.328362
 ```
 
-Angles between three atoms can be tabulated with `-a` or `--angle` followed by three atom indeces (indexing starts from 0). For example, to list angles between atoms 0, 1 and 1 in all conformers.
+Angles between three atoms can be tabulated with `-a` or `--angle` followed by three atom indeces (indexing starts from 0). For example, to list angles between atoms 0, 1 and 2 in all conformers.
 
 ```
 crestparse crest_conformers.xyz -a 0 1 2
@@ -83,4 +83,23 @@ will output
  7      -21.040082      0.004802        3.013393        0.447558%               107.876325
  8      -21.039917      0.004967        3.117012        0.375748%               110.353769
  9      -21.039617      0.005267        3.305325        0.273440%               108.053664
+```
+
+Dihedrals between four atoms can be tabulated with `-r` or `--dihedral` followed by four atom indeces (indexing starts from 0). For example, to list dihedrals between atoms 0, 1, 2 ja 3 in all conformers.
+
+```
+crestparse crest_conformers.xyz -a 0 1 2
+```
+
+will output
+
+```
+#       E (Hartree)     dE (Hartree)    dE (kcal/mol)   Boltzmann T=298.15 K    Dihedral 0-1-2-3
+ 1      -21.044884      0.000000        0.000000        72.390641%              -12.457067
+ 2      -21.043020      0.001864        1.169905        10.049309%              167.512960
+ 3      -21.042881      0.002003        1.257052        8.674748%               -33.705215
+ 6      -21.040953      0.003931        2.466671        1.126159%               -163.834904
+ 7      -21.040082      0.004802        3.013393        0.447558%               161.605868
+ 8      -21.039917      0.004967        3.117012        0.375748%               -144.963430
+ 9      -21.039617      0.005267        3.305325        0.273440%               175.822122
 ```
