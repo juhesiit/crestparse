@@ -1,4 +1,4 @@
-# Crestparse 0.2.1
+# Crestparse 0.2.2
 
 Crestparse is a command line tool for analyzing and manipulating multi-xyz files produced by crest.
 
@@ -102,4 +102,25 @@ will output
  7      -21.040082      0.004802        3.013393        0.447558%               161.605868
  8      -21.039917      0.004967        3.117012        0.375748%               -144.963430
  9      -21.039617      0.005267        3.305325        0.273440%               175.822122
+```
+
+Pyramidalization degree on a scale 0-1 can be tabulated with `-p` or `--pyramidalization` followed by four atom incedes (indexing starts from 0). The first atom in the listing is treated as the central vertex and following three the surrounding ones. Pyramidalization degree is calculated as a trihedral angle.
+
+```
+crestparse crest_conformers.xyz -p 0 1 10 4
+```
+
+will output
+
+```
+#       E (Hartree)     dE (Hartree)    dE (kcal/mol)   Boltzmann T=298.15      Pyramidalization 0-1-10-4
+1       -21.044884      0.000000        0.000000        72.390641%              1.000000
+2       -21.043020      0.001864        1.169905        10.049309%              0.996643
+3       -21.042881      0.002003        1.257052        8.674748%               0.991088
+4       -21.042213      0.002671        1.675864        4.278241%               0.987775
+5       -21.041661      0.003223        2.022288        2.384156%               0.998255
+6       -21.040953      0.003931        2.466671        1.126159%               0.998356
+7       -21.040082      0.004802        3.013393        0.447558%               0.959048
+8       -21.039917      0.004967        3.117012        0.375748%               0.959227
+9       -21.039617      0.005267        3.305325        0.273440%               0.894672
 ```
